@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <title>UNM CS 412/512 HW 2</title>
+  <style>
+    body {
+      background: #111;
+      color: #ccc;
+      font-family: monospace;
+    }
+
+    canvas {
+      border: 1px solid #444;
+    }
+  </style>
+</head>
+
+<body>
+  <h2>WebGL - HW2 Transformations</h2>
+  <p>The triangle rotates and pulses using 2D transformation matrices.</p>
+
+  <canvas id="glcanvas" width="600" height="600"></canvas>
+
+  <!-- Vertex Shader: applies a 3x3 transform matrix to each point -->
+  <script id="vertex-shader" type="x-shader/x-vertex">#version 300 es
+in vec3 aPosition;
+in vec3 aColor;
+
+uniform mat3 uMatrix;
+out vec3 vColor;
+
+void main() {
+  vec3 pos = uMatrix * vec3(aPosition.xy, 1.0);
+  gl_Position = vec4(pos.xy, 0.0, 1.0);
+  vColor = aColor;
+}
+</script>
+
+  <!-- Fragment Shader -->
+  <script id="fragment-shader" type="x-shader/x-fragment">#version 300 es
+precision mediump float;
+in vec3 vColor;
+out vec4 fragColor;
+
+void main() {
+  fragColor = vec4(vColor, 1.0);
+}
+</script>
+
+  <!-- Triangle data -->
+  <script>
+    const positions = new Float32Array([
+       0.0,  0.5, 0.0,
+      -0.5, -0.5, 0.0,
+       0.5, -0.5, 0.0
+    ]);
+
+    const colors = new Float32Array([
+      1.0, 0.0, 0.0,
+      0.0, 1.0, 0.0,
+      0.0, 0.0, 1.0
+    ]);
+  </script>
+
+  <!-- 2D transformation matrices (3x3, column-major order for WebGL) -->
+  <script>
+    // Translation by (tx, ty)
+    function translation(tx, ty) {
+      return [
+        1,  0,  0,
+        0,  1,  0,
+        tx, ty, 1
+      ];
+    }
+
+    // Scaling by (sx, sy)
+    function scaling(sx, sy) {
+      return [
+        sx, 0,  0,
+        0,  sy, 0,
+        0,  0,  1
+      ];
+    }
+
+    // Rotation by angle (radians)
+    function rotation(angle) {
+      let c = Math.cos(angle);
+      let s = Math.sin(angle);
+      return [
+        c,  s, 0,
+       -s,  c, 0,
+        0,  0, 1
+      ];
+    }
+
+    // Mirror / reflection (use -1 to flip across an axis)
+    function mirror(mx, my) {
+      return [
+        mx, 0,  0,
+        0,  my, 0,
+        0,  0,  1
+      ];
+    }
+
+    // Shear / skew by (shx, shy)
+    function shear(shx, shy) {
+      return [
+        1,   shy, 0,
+        shx, 1,   0,
+        0,   0,   1
+      ];
+    }
+
+    // Multiply two 3x3 matrices
+    function multiply(a, b) {
+      let result = new Array(9).fill(0);
+      for (let row = 0; row < 3; row++) {
+        for (let col = 0; col < 3; col++) {
+          for (let k = 0; k < 3; k++) {
+            result[col * 3 + row] += a[k * 3 + row] * b[col * 3 + k];
+          }
+        }
+      }
+      return result;
+    }
+  </script>
+
+  <script>
+    function createShader(gl, type, source) {
+      let shader = gl.createShader(type);
+      gl.shaderSource(shader, source);
+      gl.compileShader(shader);
+      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        throw new Error(gl.getShaderInfoLog(shader));
+      }
+      return shader;
+    }
+
+    function createProgram(gl, vsSource, fsSource) {
+      let vs = createShader(gl, gl.VERTEX_SHADER, vsSource);
+      let fs = createShader(gl, gl.FRAGMENT_SHADER, fsSource);
+      let prog = gl.createProgram();
+      gl.attachShader(prog, vs);
+      gl.attachShader(prog, fs);
+      gl.linkProgram(prog);
+      if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+        throw new Error(gl.getProgramInfoLog(prog));
+      }
+      return prog;
+    }
+
+    const canvas = document.getElementById("glcanvas");
+    const gl = canvas.getContext("webgl2");
+    if (!gl) alert("WebGL2 not supported");
+
+    const vsSource = document.getElementById("vertex-shader").textContent;
+    const fsSource = document.getElementById("fragment-shader").textContent;
+    const program = createProgram(gl, vsSource, fsSource);
+    gl.useProgram(program);
+
+    const posBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, posBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+    const posLoc = gl.getAttribLocation(program, "aPosition");
+    gl.enableVertexAttribArray(posLoc);
+    gl.vertexAttribPointer(posLoc, 3, gl.FLOAT, false, 0, 0);
+
+    const colorBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, colors, gl.STATIC_DRAW);
+    const colorLoc = gl.getAttribLocation(program, "aColor");
+    gl.enableVertexAttribArray(colorLoc);
+    gl.vertexAttribPointer(colorLoc, 3, gl.FLOAT, false, 0, 0);
+
+    const matrixLoc = gl.getUniformLocation(program, "uMatrix");
+
+    let startTime = Date.now();
+    function render() {
+      let t = (Date.now() - startTime) / 1000.0;
+
+      // Animate two transforms: rotation over time + pulsing scale
+      let angle = t;
+      let s = 0.8 + 0.2 * Math.sin(t * 2.0);
+
+      let matrix = multiply(rotation(angle), scaling(s, s));
+
+      gl.clearColor(0, 0, 0, 1);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+
+      gl.uniformMatrix3fv(matrixLoc, false, matrix);
+      gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+      requestAnimationFrame(render);
+    }
+    render();
+  </script>
+</body>
+
+</html>
