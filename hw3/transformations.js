@@ -1,3 +1,8 @@
+/*
+Sanjaya Basyal
+101977557
+HW-3 Intro to Computer Graphics
+*/
 // The perspective matrix is built as a product of three factors:
 //
 //     M_per = M_orth * P * F
