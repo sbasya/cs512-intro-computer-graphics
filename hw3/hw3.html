@@ -15,6 +15,13 @@ HW-3 Intro to Computer Graphics
       color: #ccc;
       font-family: monospace;
     }
+    textarea {
+      background: #222;
+      color: #0f0;
+      font: 14px monospace;
+      width: 400px;
+      height: 250px;
+    }
 
     canvas {
       border: 1px solid #444;
@@ -26,13 +33,15 @@ HW-3 Intro to Computer Graphics
   </style>
 </head>
 
-<body>
+body>
   <h2>Interactive Controls & Geometric Primitives</h2>
-  <p>Use mouse to drag and rotate the shapes. <br>
-  Use arrow keys and w, s keys to move the camera.<br>
-  Use the button and slider below to control the motion.</p>
+  <p>Edit vertex and fragment shaders on the left to get the result instantly.<br>
+  Use mouse to drag and rotate the cube. <br>
+Use arrow keys and w, s keys to move the camera.<br>
+Save your code to source file if you want to save it.<br>
+Press F12 to see the console for debugging.</p>
 
-  <!-- UI controls -->
+  <!-- UI controls (HW3  Parts) -->
   <div class="controls">
     <button id="dirBtn">Reverse Rotation</button>
     &nbsp;&nbsp;
@@ -40,7 +49,22 @@ HW-3 Intro to Computer Graphics
     <input id="speedSlider" type="range" min="0" max="3" step="0.1" value="1">
   </div>
 
-  <canvas id="glcanvas" width="400" height="400"></canvas>
+  <div style="display: flex; gap: 10px; align-items: flex-start;">
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <div>
+        <b>Vertex Shader</b><br>
+        <textarea id="vertEditor"></textarea>
+      </div>
+      <div>
+        <b>Fragment Shader</b><br>
+        <textarea id="fragEditor"></textarea>
+      </div>
+    </div>
+    <div>
+      <canvas id="glcanvas" width="400" height="400"></canvas>
+    </div>
+  </div>
+
 
   <!-- Vertex shader -->
   <script id="vertex-shader" type="x-shader/x-vertex">#version 300 es
