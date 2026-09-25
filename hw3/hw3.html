@@ -15,6 +15,7 @@ HW-3 Intro to Computer Graphics
       color: #ccc;
       font-family: monospace;
     }
+
     textarea {
       background: #222;
       color: #0f0;
@@ -33,15 +34,15 @@ HW-3 Intro to Computer Graphics
   </style>
 </head>
 
-body>
+<body>
   <h2>Interactive Controls & Geometric Primitives</h2>
   <p>Edit vertex and fragment shaders on the left to get the result instantly.<br>
-  Use mouse to drag and rotate the cube. <br>
+  Use mouse to drag and rotate the shapes. <br>
 Use arrow keys and w, s keys to move the camera.<br>
 Save your code to source file if you want to save it.<br>
 Press F12 to see the console for debugging.</p>
 
-  <!-- UI controls (HW3  Parts) -->
+  <!-- UI controls (HW3: two components) -->
   <div class="controls">
     <button id="dirBtn">Reverse Rotation</button>
     &nbsp;&nbsp;
@@ -64,7 +65,6 @@ Press F12 to see the console for debugging.</p>
       <canvas id="glcanvas" width="400" height="400"></canvas>
     </div>
   </div>
-
 
   <!-- Vertex shader -->
   <script id="vertex-shader" type="x-shader/x-vertex">#version 300 es
@@ -134,10 +134,11 @@ void main() {
 
     let program, posLoc, colorLoc, timeLoc, uMVM, uPM, uMTM;
 
-    //HW3: Own buffer for each shape
-    let sceneShape =[];
+    // HW3: each shape keeps its own buffers, so store them in a list
+    let sceneShapes = [];
 
-    // Create buffer and then return 
+    // Build buffers for one shape (same steps as the original initBuffers,
+    // but returns the buffers instead of using globals)
     function makeShape(shape, offset) {
       let vbo = gl.createBuffer();
       gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
@@ -154,8 +155,8 @@ void main() {
       return { vbo, nbo, ibo, count: shape.indices.length, offset: offset };
     }
 
-    // Hw3: Placing side by side
-     function initBuffers() {
+    // HW3: three primitives placed side by side
+    function initBuffers() {
       sceneShapes = [
         makeShape(pyramid,    [-3.0, 0, 0]),
         makeShape(cube,       [ 0.0, 0, 0]),
@@ -207,7 +208,7 @@ void main() {
       }
     });
 
-    // HW3: UI controls variable and handler
+    // HW3: UI control variables and handlers
     let rotationDir = 1;
     let rotationSpeed = 1;
     document.getElementById("dirBtn").onclick = function () {
@@ -228,47 +229,48 @@ void main() {
       gl.clearColor(0, 0, 0, 1);
       gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-      //rotation matrix
+      // mouse rotation matrices (from the original code)
       let cx = Math.cos(cubeRotY), sx = Math.sin(cubeRotY);
       let cy = Math.cos(cubeRotX), sy = Math.sin(cubeRotX);
       let rotX = [1, 0, 0, 0, 0, cy, sy, 0, 0, -sy, cy, 0, 0, 0, 0, 1];
       let rotY = [cx, 0, -sx, 0, 0, 1, 0, 0, sx, 0, cx, 0, 0, 0, 0, 1];
       let mouseRotation = multiplyMat4(rotY, rotX);
 
-      // Camera (model-view) matrix: shared by all shapes
+      // camera / model-view matrix
       let modelViewMatrix = mat4Translate(mat4Identity(), [camX, camY, camZ]);
 
       //delta time in ms
       let deltaTime = Date.now() - startTime;
       let t = deltaTime / 1000.0;
 
-      //HW3: 3 Animated transformatation
-      let spin = mat4RotateY(mat4Identity(), t * rotationSpeed * rotationDir); //rotation
+      // HW3: three animated transformations (rotation, scaling, translation)
+      let spin = mat4RotateY(mat4Identity(), t * rotationSpeed * rotationDir); // rotation
       let pulse = 0.8 + 0.2 * Math.sin(t * 2.0);
-      let scaleM = mat4Scale(pulse, pulse, pulse);  //scaling                           
-      let bob = mat4TranslateXYZ(0, 0.3 * Math.sin(t * 1.5), 0); //translation             
-      
+      let scaleM = mat4Scale(pulse, pulse, pulse);                             // scaling
+      let bob = mat4TranslateXYZ(0, 0.3 * Math.sin(t * 1.5), 0);              // translation
+
       //set time in seconds
       gl.uniform1f(timeLoc, t);
       gl.uniformMatrix4fv(uPM, false, proj);
       gl.uniformMatrix4fv(uMVM, false, modelViewMatrix);
 
-      //HW3: draw shape with its position + animated motion
-      for (let s of shapes) {
+      // HW3: draw each shape with its own position + the animated motions
+      for (let s of sceneShapes) {
         let place = mat4TranslateXYZ(s.offset[0], s.offset[1], s.offset[2]);
-        let model = matMul(place, mouseRotation, spin, bob, scaleM);
-        gl.uniformMatrix4fv(uMTM, false, model);
+        let modelTransformationMatrix = matMul(place, mouseRotation, spin, bob, scaleM);
+        gl.uniformMatrix4fv(uMTM, false, modelTransformationMatrix);
 
-        gl.bindBuffer(gl.ARRAY_BUFFER, s.buffers.vbo);
+        gl.bindBuffer(gl.ARRAY_BUFFER, s.vbo);
         gl.enableVertexAttribArray(posLoc);
         gl.vertexAttribPointer(posLoc, 3, gl.FLOAT, false, 0, 0);
 
-        gl.bindBuffer(gl.ARRAY_BUFFER, s.buffers.cbo);
+        gl.bindBuffer(gl.ARRAY_BUFFER, s.nbo);
         gl.enableVertexAttribArray(colorLoc);
         gl.vertexAttribPointer(colorLoc, 3, gl.FLOAT, false, 0, 0);
 
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, s.buffers.ibo);
-        gl.drawElements(gl.TRIANGLES, s.buffers.count, gl.UNSIGNED_SHORT, 0);
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, s.ibo);
+        // draw the object by the index order
+        gl.drawElements(gl.TRIANGLES, s.count, gl.UNSIGNED_SHORT, 0);
       }
     }
 
@@ -276,6 +278,7 @@ void main() {
     window.onload = function () {
       setInterval(render, 30);
     }
+
   </script>
 </body>
 
