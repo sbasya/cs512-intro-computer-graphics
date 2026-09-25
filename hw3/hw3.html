@@ -134,11 +134,10 @@ void main() {
 
     let program, posLoc, colorLoc, timeLoc, uMVM, uPM, uMTM;
 
-    // HW3: each shape keeps its own buffers, so store them in a list
+    // HW3: own buffer for each shape
     let sceneShapes = [];
 
-    // Build buffers for one shape (same steps as the original initBuffers,
-    // but returns the buffers instead of using globals)
+    // Build buffers for  shapes
     function makeShape(shape, offset) {
       let vbo = gl.createBuffer();
       gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
@@ -155,7 +154,7 @@ void main() {
       return { vbo, nbo, ibo, count: shape.indices.length, offset: offset };
     }
 
-    // HW3: three primitives placed side by side
+    // HW3: place side by side
     function initBuffers() {
       sceneShapes = [
         makeShape(pyramid,    [-3.0, 0, 0]),
@@ -254,7 +253,7 @@ void main() {
       gl.uniformMatrix4fv(uPM, false, proj);
       gl.uniformMatrix4fv(uMVM, false, modelViewMatrix);
 
-      // HW3: draw each shape with its own position + the animated motions
+      // HW3: draw each shape with its own position + the animated motion
       for (let s of sceneShapes) {
         let place = mat4TranslateXYZ(s.offset[0], s.offset[1], s.offset[2]);
         let modelTransformationMatrix = matMul(place, mouseRotation, spin, bob, scaleM);
