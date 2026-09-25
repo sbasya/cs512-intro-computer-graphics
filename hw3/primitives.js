@@ -1,3 +1,8 @@
+/*
+Sanjaya Basyal
+101977557
+HW-3 Intro to Computer Graphics
+*/
 
 // Geometric primitives for HW3
 // Each shape is an object with its own positions, colors, indices.
