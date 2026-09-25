@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<!--
+Sanjaya Basyal
+101977557
+HW-3 Intro to Computer Graphics
+-->
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <title>UNM CS 412/512 HW3</title>
+  <style>
+    body {
+      background: #111;
+      color: #ccc;
+      font-family: monospace;
+    }
+
+    canvas {
+      border: 1px solid #444;
+    }
+
+    .controls {
+      margin: 10px 0;
+    }
+  </style>
+</head>
+
+<body>
+  <h2>Interactive Controls & Geometric Primitives</h2>
+  <p>Use mouse to drag and rotate the shapes. <br>
+  Use arrow keys and w, s keys to move the camera.<br>
+  Use the button and slider below to control the motion.</p>
+
+  <!-- UI controls -->
+  <div class="controls">
+    <button id="dirBtn">Reverse Rotation</button>
+    &nbsp;&nbsp;
+    Rotation speed:
+    <input id="speedSlider" type="range" min="0" max="3" step="0.1" value="1">
+  </div>
+
+  <canvas id="glcanvas" width="400" height="400"></canvas>
+
+  <!-- Vertex shader -->
+  <script id="vertex-shader" type="x-shader/x-vertex">#version 300 es
+in vec3 aPosition;
+in vec3 aColor;
+
+uniform float uTime; //time in sec
+uniform mat4 uModelViewMatrix;
+uniform mat4 uProjectionMatrix;
+uniform mat4 uModelTransformationMatrix;
+
+out vec3 vColor;
+
+void main() {
+  gl_Position = uProjectionMatrix * uModelViewMatrix * uModelTransformationMatrix * vec4(aPosition,1.0);
+  vColor = aColor;
+}
+</script>
+  <!-- Fragment Shader -->
+  <script id="fragment-shader" type="x-shader/x-fragment">#version 300 es
+precision mediump float;
+in vec3 vColor;
+
+out vec4 fragColor;
+
+void main() {
+  fragColor = vec4(vColor,1.0);
+}
+</script>
+
+  <script src="primitives.js"></script>
+  <script src="transformations.js"></script>
+
+  <script>
+    function createShader(gl, type, source) {
+      let shader = gl.createShader(type);
+      gl.shaderSource(shader, source);
+      gl.compileShader(shader);
+      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        throw new Error(gl.getShaderInfoLog(shader));
+      }
+      return shader;
+    }
+
+    function createProgram(gl, vsSource, fsSource) {
+      let vs = createShader(gl, gl.VERTEX_SHADER, vsSource);
+      let fs = createShader(gl, gl.FRAGMENT_SHADER, fsSource);
+      let prog = gl.createProgram();
+      gl.attachShader(prog, vs);
+      gl.attachShader(prog, fs);
+      gl.linkProgram(prog);
+      if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+        throw new Error(gl.getProgramInfoLog(prog));
+      }
+      return prog;
+    }
+
+    // WebGL setup
+    const canvas = document.getElementById("glcanvas");
+    const gl = canvas.getContext("webgl2");
+    if (!gl) alert("WebGL2 not supported");
+
+    const vsSource = document.getElementById("vertex-shader").textContent;
+    const fsSource = document.getElementById("fragment-shader").textContent;
+    const program = createProgram(gl, vsSource, fsSource);
+    gl.useProgram(program);
+
+    const posLoc = gl.getAttribLocation(program, "aPosition");
+    const colorLoc = gl.getAttribLocation(program, "aColor");
+    const timeLoc = gl.getUniformLocation(program, "uTime");
+    const uMVM = gl.getUniformLocation(program, "uModelViewMatrix");
+    const uPM = gl.getUniformLocation(program, "uProjectionMatrix");
+    const uMTM = gl.getUniformLocation(program, "uModelTransformationMatrix");
+
+    // Build GPU buffers for one shape and remember its index count
+    function makeShape(shape) {
+      const vbo = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+      gl.bufferData(gl.ARRAY_BUFFER, shape.positions, gl.STATIC_DRAW);
+
+      const cbo = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, cbo);
+      gl.bufferData(gl.ARRAY_BUFFER, shape.colors, gl.STATIC_DRAW);
+
+      const ibo = gl.createBuffer();
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
+      gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, shape.indices, gl.STATIC_DRAW);
+
+      return { vbo, cbo, ibo, count: shape.indices.length };
+    }
+
+    // Our three primitives, each placed at a different spot on the x-axis
+    const shapes = [
+      { buffers: makeShape(pyramid),    offset: [-3.0, 0, 0] },
+      { buffers: makeShape(cube),       offset: [ 0.0, 0, 0] },
+      { buffers: makeShape(octahedron), offset: [ 3.0, 0, 0] }
+    ];
+
+    // Mouse and keyboard interactions
+    let mouseDown = false, lastX, lastY, cubeRotX = 0, cubeRotY = 0;
+    let camX = 0, camY = 0, camZ = -12;
+
+    canvas.addEventListener('mousedown', e => { mouseDown = true; lastX = e.clientX; lastY = e.clientY; });
+    canvas.addEventListener('mouseup', () => mouseDown = false);
+    canvas.addEventListener('mousemove', e => {
+      if (!mouseDown) return;
+      let dx = e.clientX - lastX;
+      let dy = e.clientY - lastY;
+      cubeRotY += dx * 0.01;
+      cubeRotX += dy * 0.01;
+      lastX = e.clientX; lastY = e.clientY;
+    });
+
+    document.addEventListener('keydown', e => {
+      const step = 0.2;
+      switch (e.key) {
+        case 'ArrowUp': camY -= step; break;
+        case 'ArrowDown': camY += step; break;
+        case 'ArrowLeft': camX += step; break;
+        case 'ArrowRight': camX -= step; break;
+        case 'w': camZ += step; break;
+        case 's': camZ -= step; break;
+      }
+    });
+
+    // UI controls
+    let rotationDir = 1;
+    let rotationSpeed = 1;
+    document.getElementById("dirBtn").onclick = function () {
+      rotationDir = -rotationDir;
+    };
+    document.getElementById("speedSlider").oninput = function (e) {
+      rotationSpeed = parseFloat(e.target.value);
+    };
+
+    // Projection setup
+    let fov = Math.PI / 4, aspect = canvas.width / canvas.height, zNear = 0.1, zFar = 100;
+    let proj = perspective(fov, aspect, zNear, zFar);
+
+    let startTime = Date.now();
+
+    function render() {
+      gl.enable(gl.DEPTH_TEST);
+      gl.clearColor(0, 0, 0, 1);
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+      let t = (Date.now() - startTime) / 1000.0;
+
+      // Camera (model-view) matrix: shared by all shapes
+      let modelViewMatrix = mat4Translate(mat4Identity(), [camX, camY, camZ]);
+
+      // Mouse rotation (applied to every shape)
+      let cx = Math.cos(cubeRotY), sx = Math.sin(cubeRotY);
+      let cy = Math.cos(cubeRotX), sy = Math.sin(cubeRotX);
+      let rotXm = [1, 0, 0, 0, 0, cy, sy, 0, 0, -sy, cy, 0, 0, 0, 0, 1];
+      let rotYm = [cx, 0, -sx, 0, 0, 1, 0, 0, sx, 0, cx, 0, 0, 0, 0, 1];
+      let mouseRotation = multiplyMat4(rotYm, rotXm);
+
+      // Continuous animated transforms (Part 4: rotation, scaling, translation)
+      let spin = mat4RotateY(mat4Identity(), t * rotationSpeed * rotationDir); // rotation
+      let pulse = 0.8 + 0.2 * Math.sin(t * 2.0);
+      let scaleM = mat4Scale(pulse, pulse, pulse);                             // scaling
+      let bob = mat4TranslateXYZ(0, 0.3 * Math.sin(t * 1.5), 0);              // translation
+
+      gl.uniform1f(timeLoc, t);
+      gl.uniformMatrix4fv(uPM, false, proj);
+      gl.uniformMatrix4fv(uMVM, false, modelViewMatrix);
+
+      // Draw each shape with its own position + the animated motions
+      for (let s of shapes) {
+        let place = mat4TranslateXYZ(s.offset[0], s.offset[1], s.offset[2]);
+        let model = matMul(place, mouseRotation, spin, bob, scaleM);
+        gl.uniformMatrix4fv(uMTM, false, model);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, s.buffers.vbo);
+        gl.enableVertexAttribArray(posLoc);
+        gl.vertexAttribPointer(posLoc, 3, gl.FLOAT, false, 0, 0);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, s.buffers.cbo);
+        gl.enableVertexAttribArray(colorLoc);
+        gl.vertexAttribPointer(colorLoc, 3, gl.FLOAT, false, 0, 0);
+
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, s.buffers.ibo);
+        gl.drawElements(gl.TRIANGLES, s.buffers.count, gl.UNSIGNED_SHORT, 0);
+      }
+    }
+
+    window.onload = function () {
+      setInterval(render, 30);
+    }
+  </script>
+</body>
+
+</html>
