@@ -1,9 +1,8 @@
-// ---------------------------------------------------------------
+
 // Geometric primitives for HW3
 // Each shape is an object with its own positions, colors, indices.
-// ---------------------------------------------------------------
 
-// Cube (given in the starter code)
+// Cube
 const cube = {
   positions: new Float32Array([
     -1, -1, -1,  // 0
