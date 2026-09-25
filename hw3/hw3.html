@@ -127,41 +127,58 @@ void main() {
     const gl = canvas.getContext("webgl2");
     if (!gl) alert("WebGL2 not supported");
 
-    const vsSource = document.getElementById("vertex-shader").textContent;
-    const fsSource = document.getElementById("fragment-shader").textContent;
-    const program = createProgram(gl, vsSource, fsSource);
-    gl.useProgram(program);
+    let vertEditor = document.getElementById("vertEditor");
+    let fragEditor = document.getElementById("fragEditor");
+    vertEditor.value = document.getElementById("vertex-shader").textContent;
+    fragEditor.value = document.getElementById("fragment-shader").textContent;
 
-    const posLoc = gl.getAttribLocation(program, "aPosition");
-    const colorLoc = gl.getAttribLocation(program, "aColor");
-    const timeLoc = gl.getUniformLocation(program, "uTime");
-    const uMVM = gl.getUniformLocation(program, "uModelViewMatrix");
-    const uPM = gl.getUniformLocation(program, "uProjectionMatrix");
-    const uMTM = gl.getUniformLocation(program, "uModelTransformationMatrix");
+    let program, posLoc, colorLoc, timeLoc, uMVM, uPM, uMTM;
 
-    // Build GPU buffers for one shape and remember its index count
-    function makeShape(shape) {
-      const vbo = gl.createBuffer();
+    //HW3: Own buffer for each shape
+    let sceneShape =[];
+
+    // Create buffer and then return 
+    function makeShape(shape, offset) {
+      let vbo = gl.createBuffer();
       gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
       gl.bufferData(gl.ARRAY_BUFFER, shape.positions, gl.STATIC_DRAW);
 
-      const cbo = gl.createBuffer();
-      gl.bindBuffer(gl.ARRAY_BUFFER, cbo);
+      let nbo = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, nbo);
       gl.bufferData(gl.ARRAY_BUFFER, shape.colors, gl.STATIC_DRAW);
 
-      const ibo = gl.createBuffer();
+      let ibo = gl.createBuffer();
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
       gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, shape.indices, gl.STATIC_DRAW);
 
-      return { vbo, cbo, ibo, count: shape.indices.length };
+      return { vbo, nbo, ibo, count: shape.indices.length, offset: offset };
     }
 
-    // Our three primitives, each placed at a different spot on the x-axis
-    const shapes = [
-      { buffers: makeShape(pyramid),    offset: [-3.0, 0, 0] },
-      { buffers: makeShape(cube),       offset: [ 0.0, 0, 0] },
-      { buffers: makeShape(octahedron), offset: [ 3.0, 0, 0] }
-    ];
+    // Hw3: Placing side by side
+     function initBuffers() {
+      sceneShapes = [
+        makeShape(pyramid,    [-3.0, 0, 0]),
+        makeShape(cube,       [ 0.0, 0, 0]),
+        makeShape(octahedron, [ 3.0, 0, 0])
+      ];
+    }
+    initBuffers();
+
+    function initShaderProgram() {
+      try {
+        program = createProgram(gl, vertEditor.value, fragEditor.value);
+        gl.useProgram(program);
+        posLoc = gl.getAttribLocation(program, "aPosition");
+        colorLoc = gl.getAttribLocation(program, "aColor");
+        timeLoc = gl.getUniformLocation(program, "uTime");
+        uMVM = gl.getUniformLocation(program, "uModelViewMatrix");
+        uPM = gl.getUniformLocation(program, "uProjectionMatrix");
+        uMTM = gl.getUniformLocation(program, "uModelTransformationMatrix");
+      } catch (e) { console.error(e); }
+    }
+    initShaderProgram();
+    vertEditor.onkeyup = initShaderProgram;
+    fragEditor.onkeyup = initShaderProgram;
 
     // Mouse and keyboard interactions
     let mouseDown = false, lastX, lastY, cubeRotX = 0, cubeRotY = 0;
@@ -190,7 +207,7 @@ void main() {
       }
     });
 
-    // UI controls
+    // HW3: UI controls variable and handler
     let rotationDir = 1;
     let rotationSpeed = 1;
     document.getElementById("dirBtn").onclick = function () {
@@ -211,29 +228,32 @@ void main() {
       gl.clearColor(0, 0, 0, 1);
       gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-      let t = (Date.now() - startTime) / 1000.0;
+      //rotation matrix
+      let cx = Math.cos(cubeRotY), sx = Math.sin(cubeRotY);
+      let cy = Math.cos(cubeRotX), sy = Math.sin(cubeRotX);
+      let rotX = [1, 0, 0, 0, 0, cy, sy, 0, 0, -sy, cy, 0, 0, 0, 0, 1];
+      let rotY = [cx, 0, -sx, 0, 0, 1, 0, 0, sx, 0, cx, 0, 0, 0, 0, 1];
+      let mouseRotation = multiplyMat4(rotY, rotX);
 
       // Camera (model-view) matrix: shared by all shapes
       let modelViewMatrix = mat4Translate(mat4Identity(), [camX, camY, camZ]);
 
-      // Mouse rotation (applied to every shape)
-      let cx = Math.cos(cubeRotY), sx = Math.sin(cubeRotY);
-      let cy = Math.cos(cubeRotX), sy = Math.sin(cubeRotX);
-      let rotXm = [1, 0, 0, 0, 0, cy, sy, 0, 0, -sy, cy, 0, 0, 0, 0, 1];
-      let rotYm = [cx, 0, -sx, 0, 0, 1, 0, 0, sx, 0, cx, 0, 0, 0, 0, 1];
-      let mouseRotation = multiplyMat4(rotYm, rotXm);
+      //delta time in ms
+      let deltaTime = Date.now() - startTime;
+      let t = deltaTime / 1000.0;
 
-      // Continuous animated transforms (Part 4: rotation, scaling, translation)
-      let spin = mat4RotateY(mat4Identity(), t * rotationSpeed * rotationDir); // rotation
+      //HW3: 3 Animated transformatation
+      let spin = mat4RotateY(mat4Identity(), t * rotationSpeed * rotationDir); //rotation
       let pulse = 0.8 + 0.2 * Math.sin(t * 2.0);
-      let scaleM = mat4Scale(pulse, pulse, pulse);                             // scaling
-      let bob = mat4TranslateXYZ(0, 0.3 * Math.sin(t * 1.5), 0);              // translation
-
+      let scaleM = mat4Scale(pulse, pulse, pulse);  //scaling                           
+      let bob = mat4TranslateXYZ(0, 0.3 * Math.sin(t * 1.5), 0); //translation             
+      
+      //set time in seconds
       gl.uniform1f(timeLoc, t);
       gl.uniformMatrix4fv(uPM, false, proj);
       gl.uniformMatrix4fv(uMVM, false, modelViewMatrix);
 
-      // Draw each shape with its own position + the animated motions
+      //HW3: draw shape with its position + animated motion
       for (let s of shapes) {
         let place = mat4TranslateXYZ(s.offset[0], s.offset[1], s.offset[2]);
         let model = matMul(place, mouseRotation, spin, bob, scaleM);
@@ -252,6 +272,7 @@ void main() {
       }
     }
 
+    // Initialize when page loads
     window.onload = function () {
       setInterval(render, 30);
     }
