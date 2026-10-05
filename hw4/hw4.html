@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<!--
+Sanjaya Basyal
+101977557
+HW-4 Intro to Computer Graphics
+-->
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <title>UNM CS 412/512 HW4</title>
+  <style>
+    body {
+      background: #111;
+      color: #ccc;
+      font-family: monospace;
+    }
+
+    textarea {
+      background: #222;
+      color: #0f0;
+      font: 14px monospace;
+      width: 400px;
+      height: 250px;
+    }
+
+    canvas {
+      border: 1px solid #444;
+    }
+
+    .controls {
+      margin: 10px 0;
+    }
+  </style>
+</head>
+
+<body>
+  <h2>Hierarchical Model - Robotic Arm</h2>
+  <p>A 4-level robotic arm: base -> lower arm -> upper arm -> hand.<br>
+  Use mouse to drag and rotate the scene.<br>
+  Use arrow keys and w, s keys to move the camera.<br>
+  Use the sliders below to bend the lower arm and upper arm joints.</p>
+
+  <!-- UI controls: two sliders for the chained joints -->
+  <div class="controls">
+    Lower arm angle:
+    <input id="lowerSlider" type="range" min="-90" max="90" step="1" value="30">
+    &nbsp;&nbsp;
+    Upper arm angle:
+    <input id="upperSlider" type="range" min="-90" max="90" step="1" value="-40">
+  </div>
+
+  <canvas id="glcanvas" width="500" height="500"></canvas>
+
+  <!-- Vertex shader -->
+  <script id="vertex-shader" type="x-shader/x-vertex">#version 300 es
+in vec3 aPosition;
+in vec3 aColor;
+
+uniform float uTime; //time in sec
+uniform mat4 uModelViewMatrix;
+uniform mat4 uProjectionMatrix;
+uniform mat4 uModelTransformationMatrix;
+
+out vec3 vColor;
+
+void main() {
+  gl_Position = uProjectionMatrix * uModelViewMatrix * uModelTransformationMatrix * vec4(aPosition,1.0);
+  vColor = aColor;
+}
+</script>
+  <!-- Fragment Shader -->
+  <script id="fragment-shader" type="x-shader/x-fragment">#version 300 es
+precision mediump float;
+in vec3 vColor;
+
+out vec4 fragColor;
+
+void main() {
+  fragColor = vec4(vColor,1.0);
+}
+</script>
+
+  <script src="primitives.js"></script>
+  <script src="transformations.js"></script>
+
+  <script>
+    function createShader(gl, type, source) {
+      let shader = gl.createShader(type);
+      gl.shaderSource(shader, source);
+      gl.compileShader(shader);
+      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        throw new Error(gl.getShaderInfoLog(shader));
+      }
+      return shader;
+    }
+
+    function createProgram(gl, vsSource, fsSource) {
+      let vs = createShader(gl, gl.VERTEX_SHADER, vsSource);
+      let fs = createShader(gl, gl.FRAGMENT_SHADER, fsSource);
+      let prog = gl.createProgram();
+      gl.attachShader(prog, vs);
+      gl.attachShader(prog, fs);
+      gl.linkProgram(prog);
+      if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+        throw new Error(gl.getProgramInfoLog(prog));
+      }
+      return prog;
+    }
+
+    // WebGL setup
+    const canvas = document.getElementById("glcanvas");
+    const gl = canvas.getContext("webgl2");
+    if (!gl) alert("WebGL2 not supported");
+
+    const vsSource = document.getElementById("vertex-shader").textContent;
+    const fsSource = document.getElementById("fragment-shader").textContent;
+    const program = createProgram(gl, vsSource, fsSource);
+    gl.useProgram(program);
+
+    const posLoc = gl.getAttribLocation(program, "aPosition");
+    const colorLoc = gl.getAttribLocation(program, "aColor");
+    const timeLoc = gl.getUniformLocation(program, "uTime");
+    const uMVM = gl.getUniformLocation(program, "uModelViewMatrix");
+    const uPM = gl.getUniformLocation(program, "uProjectionMatrix");
+    const uMTM = gl.getUniformLocation(program, "uModelTransformationMatrix");
+
+    // One cube's buffers, reused for every arm segment
+    const vbo = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+    gl.bufferData(gl.ARRAY_BUFFER, cube.positions, gl.STATIC_DRAW);
+
+    const nbo = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, nbo);
+    gl.bufferData(gl.ARRAY_BUFFER, cube.colors, gl.STATIC_DRAW);
+
+    const ibo = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, cube.indices, gl.STATIC_DRAW);
+
+    // Mouse and keyboard interactions
+    let mouseDown = false, lastX, lastY, sceneRotX = 0, sceneRotY = 0;
+    let camX = 0, camY = 0, camZ = -18;
+
+    canvas.addEventListener('mousedown', e => { mouseDown = true; lastX = e.clientX; lastY = e.clientY; });
+    canvas.addEventListener('mouseup', () => mouseDown = false);
+    canvas.addEventListener('mousemove', e => {
+      if (!mouseDown) return;
+      let dx = e.clientX - lastX;
+      let dy = e.clientY - lastY;
+      sceneRotY += dx * 0.01;
+      sceneRotX += dy * 0.01;
+      lastX = e.clientX; lastY = e.clientY;
+    });
+
+    document.addEventListener('keydown', e => {
+      const step = 0.2;
+      switch (e.key) {
+        case 'ArrowUp': camY -= step; break;
+        case 'ArrowDown': camY += step; break;
+        case 'ArrowLeft': camX += step; break;
+        case 'ArrowRight': camX -= step; break;
+        case 'w': camZ += step; break;
+        case 's': camZ -= step; break;
+      }
+    });
+
+    // UI controls: read the two slider angles (in degrees)
+    let lowerAngle = 30;
+    let upperAngle = -40;
+    document.getElementById("lowerSlider").oninput = function (e) {
+      lowerAngle = parseFloat(e.target.value);
+    };
+    document.getElementById("upperSlider").oninput = function (e) {
+      upperAngle = parseFloat(e.target.value);
+    };
+
+    // Projection setup
+    let fov = Math.PI / 4, aspect = canvas.width / canvas.height, zNear = 0.1, zFar = 100;
+    let proj = perspective(fov, aspect, zNear, zFar);
+
+    // Draw one cube using the given model matrix
+    function drawCube(model) {
+      gl.uniformMatrix4fv(uMTM, false, model);
+
+      gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+      gl.enableVertexAttribArray(posLoc);
+      gl.vertexAttribPointer(posLoc, 3, gl.FLOAT, false, 0, 0);
+
+      gl.bindBuffer(gl.ARRAY_BUFFER, nbo);
+      gl.enableVertexAttribArray(colorLoc);
+      gl.vertexAttribPointer(colorLoc, 3, gl.FLOAT, false, 0, 0);
+
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
+      gl.drawElements(gl.TRIANGLES, cube.indices.length, gl.UNSIGNED_SHORT, 0);
+    }
+
+    let startTime = Date.now();
+
+    function render() {
+      gl.enable(gl.DEPTH_TEST);
+      gl.clearColor(0, 0, 0, 1);
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+      let t = (Date.now() - startTime) / 1000.0;
+
+      // camera / model-view matrix
+      let modelViewMatrix = mat4Translate(mat4Identity(), [camX, camY, camZ]);
+
+      // mouse rotation of the whole scene
+      let cx = Math.cos(sceneRotY), sx = Math.sin(sceneRotY);
+      let cy = Math.cos(sceneRotX), sy = Math.sin(sceneRotX);
+      let rotY = [cx, 0, -sx, 0, 0, 1, 0, 0, sx, 0, cx, 0, 0, 0, 0, 1];
+      let rotX = [1, 0, 0, 0, 0, cy, sy, 0, 0, -sy, cy, 0, 0, 0, 0, 1];
+      let sceneRotation = multiplyMat4(rotY, rotX);
+
+      gl.uniform1f(timeLoc, t);
+      gl.uniformMatrix4fv(uPM, false, proj);
+      gl.uniformMatrix4fv(uMVM, false, modelViewMatrix);
+
+      // Convert slider degrees to radians
+      let lowerRad = lowerAngle * Math.PI / 180.0;
+      let upperRad = upperAngle * Math.PI / 180.0;
+
+      // base spins slowly over time (movement at the root level)
+      let baseSpin = t * 0.5;
+
+      // ---------------- Hierarchy (each level builds on the one above) ----------------
+
+      // LEVEL 1: BASE  (a wide, short block at the bottom, spinning)
+      let base = matMul(
+        sceneRotation,
+        mat4TranslateXYZ(0, -4, 0),
+        mat4RotateY(mat4Identity(), baseSpin)
+      );
+      drawCube(matMul(base, mat4Scale(1.5, 0.5, 1.5)));
+
+      // LEVEL 2: LOWER ARM  (attached on top of the base, bends by lowerAngle)
+      let lowerArm = matMul(
+        base,
+        mat4TranslateXYZ(0, 0.5, 0),       // move up to top of base
+        mat4RotateZFresh(lowerRad),        // joint rotation
+        mat4TranslateXYZ(0, 2, 0)          // move up so it grows upward from the joint
+      );
+      drawCube(matMul(lowerArm, mat4Scale(0.4, 2, 0.4)));
+
+      // LEVEL 3: UPPER ARM  (attached on top of the lower arm, bends by upperAngle)
+      let upperArm = matMul(
+        lowerArm,
+        mat4TranslateXYZ(0, 2, 0),         // move to top of lower arm
+        mat4RotateZFresh(upperRad),        // joint rotation
+        mat4TranslateXYZ(0, 1.5, 0)        // grow upward from this joint
+      );
+      drawCube(matMul(upperArm, mat4Scale(0.3, 1.5, 0.3)));
+
+      // LEVEL 4: HAND  (attached at the tip of the upper arm, wiggles a little)
+      let handWiggle = 0.4 * Math.sin(t * 3.0);
+      let hand = matMul(
+        upperArm,
+        mat4TranslateXYZ(0, 1.5, 0),       // move to tip of upper arm
+        mat4RotateZFresh(handWiggle),      // small wiggle motion
+        mat4TranslateXYZ(0, 0.4, 0)
+      );
+      drawCube(matMul(hand, mat4Scale(0.5, 0.4, 0.5)));
+    }
+
+    window.onload = function () {
+      setInterval(render, 30);
+    }
+  </script>
+</body>
+
+</html>
