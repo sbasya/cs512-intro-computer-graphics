@@ -22,10 +22,20 @@ precision mediump float;
 in vec3 vPosition;
 in vec3 vNormal;
 
-uniform vec3 uLightPos;   // eye space
+uniform vec3 uLightPos;    // light 1 (eye space)
+uniform vec3 uLightPos2;   // light 2 (eye space)
 uniform vec3 uColor;
 
 out vec4 fragColor;
+
+// Diffuse + specular contribution from ONE light
+vec3 lightContribution(vec3 lightPos, vec3 N, vec3 V, vec3 Kd, vec3 Ks, float shininess) {
+  vec3 L = normalize(lightPos - vPosition);
+  vec3 R = reflect(-L, N);
+  float diff = max(dot(N, L), 0.0);
+  float spec = pow(max(dot(V, R), 0.0), shininess);
+  return Kd * diff + Ks * spec;
+}
 
 void main() {
   vec3 Ka = 0.2 * uColor;
@@ -34,14 +44,14 @@ void main() {
   float shininess = 32.0;
 
   vec3 N = normalize(vNormal);
-  vec3 L = normalize(uLightPos - vPosition);
   vec3 V = normalize(-vPosition);           // camera sits at the origin
-  vec3 R = reflect(-L, N);
 
-  float diff = max(dot(N, L), 0.0);
-  float spec = pow(max(dot(V, R), 0.0), shininess);
+  // Ambient once, then ADD each light's diffuse + specular
+  vec3 color = Ka;
+  color += lightContribution(uLightPos,  N, V, Kd, Ks, shininess);
+  color += lightContribution(uLightPos2, N, V, Kd, Ks, shininess);
 
-  fragColor = vec4(Ka + Kd * diff + Ks * spec, 1.0);
+  fragColor = vec4(color, 1.0);
 }
 `;
 
@@ -77,7 +87,7 @@ const shaderError = document.getElementById("shaderError");
 vertEditor.value = VERTEX_SHADER;
 fragEditor.value = FRAGMENT_SHADER;
 
-let program, uModelView, uProjection, uLightPos, uColor;
+let program, uModelView, uProjection, uLightPos, uLightPos2, uColor;
 
 function updateProgram() {
   try {
@@ -88,6 +98,7 @@ function updateProgram() {
     uModelView = gl.getUniformLocation(program, "uModelView");
     uProjection = gl.getUniformLocation(program, "uProjection");
     uLightPos = gl.getUniformLocation(program, "uLightPos");
+    uLightPos2 = gl.getUniformLocation(program, "uLightPos2");
     uColor = gl.getUniformLocation(program, "uColor");
     shaderError.textContent = "";
   } catch (e) {
@@ -122,7 +133,8 @@ const sphereMesh = createMesh(createSphere(32, 16));
 gl.enable(gl.DEPTH_TEST);
 gl.clearColor(0, 0, 0, 1);
 const projection = perspective(Math.PI / 4, canvas.width / canvas.height, 0.1, 100);
-const lightWorld = [3, 4, 5];
+const lightWorld = [3, 4, 5];       // light 1: upper-right, in front
+const lightWorld2 = [-4, -2, 3];    // light 2: lower-left, in front
 
 // nteractive controls
 let dragRotX = 0, dragRotY = -0.5;      // mouse drag
@@ -218,6 +230,7 @@ function render(time) {
   const view = translate(camX, camY, camZ);
   gl.uniformMatrix4fv(uProjection, false, projection);
   gl.uniform3fv(uLightPos, transformPoint(view, lightWorld));
+  gl.uniform3fv(uLightPos2, transformPoint(view, lightWorld2));
 
   // Whole-model rotation
   const axisRotation = ROTATE[axisSelect.value](sliderAngle * Math.PI / 180 + spinAngle);
