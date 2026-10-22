@@ -30,6 +30,8 @@ uniform vec3 uLightPos;    // light 1 (eye space)
 uniform vec3 uLightPos2;   // light 2 (eye space)
 uniform vec3 uColor;
 uniform bool uFlat;        // true -> flat shading, false -> smooth shading
+uniform float uShininess;  // specular exponent (controlled by a slider)
+uniform float uBrightness; // overall light brightness (controlled by a slider)
 
 out vec4 fragColor;
 
@@ -46,16 +48,16 @@ void main() {
   vec3 Ka = 0.2 * uColor;
   vec3 Kd = 0.8 * uColor;
   vec3 Ks = vec3(0.5);
-  float shininess = 32.0;
+  float shininess = uShininess;
 
   // Pick the flat (per-face) normal or the smooth (interpolated) normal
   vec3 N = normalize(uFlat ? vNormalFlat : vNormal);
   vec3 V = normalize(-vPosition);           // camera sits at the origin
 
-  // Ambient once, then ADD each light's diffuse + specular
+  // Ambient once, then ADD each light's diffuse + specular (scaled by brightness)
   vec3 color = Ka;
-  color += lightContribution(uLightPos,  N, V, Kd, Ks, shininess);
-  color += lightContribution(uLightPos2, N, V, Kd, Ks, shininess);
+  color += uBrightness * lightContribution(uLightPos,  N, V, Kd, Ks, shininess);
+  color += uBrightness * lightContribution(uLightPos2, N, V, Kd, Ks, shininess);
 
   fragColor = vec4(color, 1.0);
 }
@@ -93,7 +95,7 @@ const shaderError = document.getElementById("shaderError");
 vertEditor.value = VERTEX_SHADER;
 fragEditor.value = FRAGMENT_SHADER;
 
-let program, uModelView, uProjection, uLightPos, uLightPos2, uColor, uFlat;
+let program, uModelView, uProjection, uLightPos, uLightPos2, uColor, uFlat, uShininess, uBrightness;
 
 function updateProgram() {
   try {
@@ -107,6 +109,8 @@ function updateProgram() {
     uLightPos2 = gl.getUniformLocation(program, "uLightPos2");
     uColor = gl.getUniformLocation(program, "uColor");
     uFlat = gl.getUniformLocation(program, "uFlat");
+    uShininess = gl.getUniformLocation(program, "uShininess");
+    uBrightness = gl.getUniformLocation(program, "uBrightness");
     shaderError.textContent = "";
   } catch (e) {
     shaderError.textContent = e.message.replace(/\0/g, "");  // some drivers end the log with \0
@@ -149,6 +153,8 @@ let camX = 0, camY = 0, camZ = -7;      // arrow keys, w, s
 let sliderAngle = 0;                    // degrees
 let spinning = false, spinAngle = 0;    // Start/Stop button
 let upperArmAngle = 0, foreArmAngle = 0; // user-controlled joint angles (radians)
+let shininess = 32.0;                    // specular exponent (slider)
+let brightness = 1.0;                    // light brightness (slider)
 
 let mouseDown = false, lastX, lastY;
 canvas.addEventListener("mousedown", e => { mouseDown = true; lastX = e.clientX; lastY = e.clientY; });
@@ -190,6 +196,16 @@ document.getElementById("upperArmSlider").addEventListener("input", e => {
 document.getElementById("foreArmSlider").addEventListener("input", e => {
   foreArmAngle = Number(e.target.value) * Math.PI / 180;
   document.getElementById("foreArmValue").textContent = e.target.value;
+});
+
+// Sliders for material shininess and light brightness
+document.getElementById("shininessSlider").addEventListener("input", e => {
+  shininess = Number(e.target.value);
+  document.getElementById("shininessValue").textContent = e.target.value;
+});
+document.getElementById("brightnessSlider").addEventListener("input", e => {
+  brightness = Number(e.target.value) / 100;   // percent -> multiplier
+  document.getElementById("brightnessValue").textContent = e.target.value;
 });
 
 
@@ -252,6 +268,8 @@ function render(time) {
   gl.uniformMatrix4fv(uProjection, false, projection);
   gl.uniform3fv(uLightPos, transformPoint(view, lightWorld));
   gl.uniform3fv(uLightPos2, transformPoint(view, lightWorld2));
+  gl.uniform1f(uShininess, shininess);
+  gl.uniform1f(uBrightness, brightness);
 
   // Whole-model rotation
   const axisRotation = ROTATE[axisSelect.value](sliderAngle * Math.PI / 180 + spinAngle);
