@@ -53,3 +53,34 @@ function createCylinder(segments) {
 
   return { positions: new Float32Array(pos), normals: new Float32Array(nrm), indices: new Uint16Array(idx) };
 }
+
+// Sphere built from the parametric equations:
+//   x = sin(v)cos(u),  y = cos(v),  z = sin(v)sin(u)
+// For a unit sphere the position IS the outward normal, so this is smooth-shaded.
+function createSphere(uSteps, vSteps) {
+  const pos = [], nrm = [], idx = [];
+
+  for (let i = 0; i <= vSteps; i++) {
+    const v = (i / vSteps) * Math.PI;          
+    const sinV = Math.sin(v), cosV = Math.cos(v);
+    for (let j = 0; j <= uSteps; j++) {
+      const u = (j / uSteps) * Math.PI * 2;    
+      const x = sinV * Math.cos(u);
+      const y = cosV;
+      const z = sinV * Math.sin(u);
+      pos.push(x, y, z);
+      nrm.push(x, y, z);                       
+    }
+  }
+
+  // Two triangles per grid cell
+  for (let i = 0; i < vSteps; i++) {
+    for (let j = 0; j < uSteps; j++) {
+      const a = i * (uSteps + 1) + j;
+      const b = a + uSteps + 1;
+      idx.push(a, b, a + 1, a + 1, b, b + 1);
+    }
+  }
+
+  return { positions: new Float32Array(pos), normals: new Float32Array(nrm), indices: new Uint16Array(idx) };
+}
