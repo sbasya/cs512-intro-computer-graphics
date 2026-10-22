@@ -117,6 +117,7 @@ function createMesh({ positions, normals, indices }) {
 
 const cubeMesh = createMesh(createCube());
 const cylinderMesh = createMesh(createCylinder(32));
+const sphereMesh = createMesh(createSphere(32, 16));
 
 gl.enable(gl.DEPTH_TEST);
 gl.clearColor(0, 0, 0, 1);
@@ -166,15 +167,26 @@ function createNode(mesh, color, shape) {
   return { mesh, color, shape, joint: null, children: [] };
 }
 
-// Lower arm: scale the cylinder then move it up by 0.6 so its bottom sits at the joint
+// Lower arm (level 1, root): scale the cylinder then move it up so its bottom sits at the joint
 const lowerArm = createNode(cylinderMesh, [1, 0.2, 0.2],
   multiply(translate(0, 0.6, 0), scale(0.3, 0.6, 0.3)));
 
-// Upper arm: scale the cube then move it up by 0.5 so its bottom sits at the joint
+// Upper arm (level 2): a cube
 const upperArm = createNode(cubeMesh, [0.2, 0.4, 1],
   multiply(translate(0, 0.5, 0), scale(0.2, 0.5, 0.2)));
 
+// Forearm (level 3): a thinner cylinder
+const foreArm = createNode(cylinderMesh, [0.2, 1, 0.4],
+  multiply(translate(0, 0.45, 0), scale(0.15, 0.45, 0.15)));
+
+// Hand (level 4): a sphere at the tip
+const hand = createNode(sphereMesh, [1, 0.9, 0.2],
+  scale(0.25, 0.25, 0.25));
+
+// Build the 4-level tree:  lowerArm -> upperArm -> foreArm -> hand
 lowerArm.children.push(upperArm);
+upperArm.children.push(foreArm);
+foreArm.children.push(hand);
 
 function drawNode(node, frame) {
   gl.uniformMatrix4fv(uModelView, false, multiply(frame, node.shape));
@@ -214,8 +226,14 @@ function render(time) {
   // Lower arm (root)
   lowerArm.joint = multiply(multiply(translate(0, -2, 0), rotation), rotateZ(0.5 * Math.sin(t)));
 
-  // Upper arm (child)
+  // Upper arm (child of lower arm)
   upperArm.joint = multiply(translate(0, 1.2, 0), rotateZ(Math.sin(1.5 * t)));
+
+  // Forearm (child of upper arm)
+  foreArm.joint = multiply(translate(0, 1.0, 0), rotateZ(0.6 * Math.sin(2.0 * t)));
+
+  // Hand (child of forearm)
+  hand.joint = multiply(translate(0, 0.9, 0), rotateZ(0.8 * Math.sin(3.0 * t)));
 
   drawTree(lowerArm, view);
   requestAnimationFrame(render);
