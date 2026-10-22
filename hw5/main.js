@@ -6,12 +6,15 @@ uniform mat4 uModelView;
 uniform mat4 uProjection;
 
 out vec3 vPosition;
-out vec3 vNormal;
+out vec3 vNormal;        // smooth-interpolated normal
+flat out vec3 vNormalFlat;  // NOT interpolated -> flat shading
 
 void main() {
   vec4 p = uModelView * vec4(aPosition, 1.0);
   vPosition = p.xyz;
-  vNormal = mat3(uModelView) * aNormal;
+  vec3 n = mat3(uModelView) * aNormal;
+  vNormal = n;
+  vNormalFlat = n;
   gl_Position = uProjection * p;
 }
 `;
@@ -20,11 +23,13 @@ const FRAGMENT_SHADER = `#version 300 es
 precision mediump float;
 
 in vec3 vPosition;
-in vec3 vNormal;
+in vec3 vNormal;           // smooth normal
+flat in vec3 vNormalFlat;  // flat (per-face) normal
 
 uniform vec3 uLightPos;    // light 1 (eye space)
 uniform vec3 uLightPos2;   // light 2 (eye space)
 uniform vec3 uColor;
+uniform bool uFlat;        // true -> flat shading, false -> smooth shading
 
 out vec4 fragColor;
 
@@ -43,7 +48,8 @@ void main() {
   vec3 Ks = vec3(0.5);
   float shininess = 32.0;
 
-  vec3 N = normalize(vNormal);
+  // Pick the flat (per-face) normal or the smooth (interpolated) normal
+  vec3 N = normalize(uFlat ? vNormalFlat : vNormal);
   vec3 V = normalize(-vPosition);           // camera sits at the origin
 
   // Ambient once, then ADD each light's diffuse + specular
@@ -87,7 +93,7 @@ const shaderError = document.getElementById("shaderError");
 vertEditor.value = VERTEX_SHADER;
 fragEditor.value = FRAGMENT_SHADER;
 
-let program, uModelView, uProjection, uLightPos, uLightPos2, uColor;
+let program, uModelView, uProjection, uLightPos, uLightPos2, uColor, uFlat;
 
 function updateProgram() {
   try {
@@ -100,6 +106,7 @@ function updateProgram() {
     uLightPos = gl.getUniformLocation(program, "uLightPos");
     uLightPos2 = gl.getUniformLocation(program, "uLightPos2");
     uColor = gl.getUniformLocation(program, "uColor");
+    uFlat = gl.getUniformLocation(program, "uFlat");
     shaderError.textContent = "";
   } catch (e) {
     shaderError.textContent = e.message.replace(/\0/g, "");  // some drivers end the log with \0
@@ -175,25 +182,27 @@ document.getElementById("slider").addEventListener("input", e => {
 document.getElementById("spinButton").addEventListener("click", () => spinning = !spinning);
 
 
-function createNode(mesh, color, shape) {
-  return { mesh, color, shape, joint: null, children: [] };
+// flatShade = true  -> faceted (flat) look
+// flatShade = false -> smooth look
+function createNode(mesh, color, shape, flatShade) {
+  return { mesh, color, shape, flatShade, joint: null, children: [] };
 }
 
-// Lower arm (level 1, root): scale the cylinder then move it up so its bottom sits at the joint
+// Lower arm (level 1, root): smooth-shaded cylinder
 const lowerArm = createNode(cylinderMesh, [1, 0.2, 0.2],
-  multiply(translate(0, 0.6, 0), scale(0.3, 0.6, 0.3)));
+  multiply(translate(0, 0.6, 0), scale(0.3, 0.6, 0.3)), false);
 
-// Upper arm (level 2): a cube
+// Upper arm (level 2): a cube (flat by nature)
 const upperArm = createNode(cubeMesh, [0.2, 0.4, 1],
-  multiply(translate(0, 0.5, 0), scale(0.2, 0.5, 0.2)));
+  multiply(translate(0, 0.5, 0), scale(0.2, 0.5, 0.2)), true);
 
-// Forearm (level 3): a thinner cylinder
+// Forearm (level 3): a cylinder forced to FLAT shading -> shows visible facets
 const foreArm = createNode(cylinderMesh, [0.2, 1, 0.4],
-  multiply(translate(0, 0.45, 0), scale(0.15, 0.45, 0.15)));
+  multiply(translate(0, 0.45, 0), scale(0.15, 0.45, 0.15)), true);
 
-// Hand (level 4): a sphere at the tip
+// Hand (level 4): a SMOOTH-shaded sphere -> perfectly round
 const hand = createNode(sphereMesh, [1, 0.9, 0.2],
-  scale(0.25, 0.25, 0.25));
+  scale(0.25, 0.25, 0.25), false);
 
 // Build the 4-level tree:  lowerArm -> upperArm -> foreArm -> hand
 lowerArm.children.push(upperArm);
@@ -203,6 +212,7 @@ foreArm.children.push(hand);
 function drawNode(node, frame) {
   gl.uniformMatrix4fv(uModelView, false, multiply(frame, node.shape));
   gl.uniform3fv(uColor, node.color);
+  gl.uniform1i(uFlat, node.flatShade ? 1 : 0);   // tell the shader flat or smooth
   gl.bindVertexArray(node.mesh.vao);
   gl.drawElements(gl.TRIANGLES, node.mesh.count, gl.UNSIGNED_SHORT, 0);
 }
