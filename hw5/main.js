@@ -148,6 +148,7 @@ let dragRotX = 0, dragRotY = -0.5;      // mouse drag
 let camX = 0, camY = 0, camZ = -7;      // arrow keys, w, s
 let sliderAngle = 0;                    // degrees
 let spinning = false, spinAngle = 0;    // Start/Stop button
+let upperArmAngle = 0, foreArmAngle = 0; // user-controlled joint angles (radians)
 
 let mouseDown = false, lastX, lastY;
 canvas.addEventListener("mousedown", e => { mouseDown = true; lastX = e.clientX; lastY = e.clientY; });
@@ -180,6 +181,16 @@ document.getElementById("slider").addEventListener("input", e => {
   document.getElementById("sliderValue").textContent = sliderAngle;
 });
 document.getElementById("spinButton").addEventListener("click", () => spinning = !spinning);
+
+// Sliders to bend two joints by hand (degrees -> radians)
+document.getElementById("upperArmSlider").addEventListener("input", e => {
+  upperArmAngle = Number(e.target.value) * Math.PI / 180;
+  document.getElementById("upperArmValue").textContent = e.target.value;
+});
+document.getElementById("foreArmSlider").addEventListener("input", e => {
+  foreArmAngle = Number(e.target.value) * Math.PI / 180;
+  document.getElementById("foreArmValue").textContent = e.target.value;
+});
 
 
 // flatShade = true  -> faceted (flat) look
@@ -249,11 +260,11 @@ function render(time) {
   // Lower arm (root)
   lowerArm.joint = multiply(multiply(translate(0, -2, 0), rotation), rotateZ(0.5 * Math.sin(t)));
 
-  // Upper arm (child of lower arm)
-  upperArm.joint = multiply(translate(0, 1.2, 0), rotateZ(Math.sin(1.5 * t)));
+  // Upper arm (child of lower arm) -- bent by the Upper Arm slider
+  upperArm.joint = multiply(translate(0, 1.2, 0), rotateZ(upperArmAngle));
 
-  // Forearm (child of upper arm)
-  foreArm.joint = multiply(translate(0, 1.0, 0), rotateZ(0.6 * Math.sin(2.0 * t)));
+  // Forearm (child of upper arm) -- bent by the Forearm slider
+  foreArm.joint = multiply(translate(0, 1.0, 0), rotateZ(foreArmAngle));
 
   // Hand (child of forearm)
   hand.joint = multiply(translate(0, 0.9, 0), rotateZ(0.8 * Math.sin(3.0 * t)));
