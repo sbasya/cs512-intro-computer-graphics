@@ -147,7 +147,7 @@ const projection = perspective(Math.PI / 4, canvas.width / canvas.height, 0.1, 1
 const lightWorld = [3, 4, 5];       // light 1: upper-right, in front
 const lightWorld2 = [-4, -2, 3];    // light 2: lower-left, in front
 
-// nteractive controls
+// interactive controls
 let dragRotX = 0, dragRotY = -0.5;      // mouse drag
 let camX = 0, camY = 0, camZ = -7;      // arrow keys, w, s
 let sliderAngle = 0;                    // degrees
@@ -209,8 +209,7 @@ document.getElementById("brightnessSlider").addEventListener("input", e => {
 });
 
 
-// flatShade = true  -> faceted (flat) look
-// flatShade = false -> smooth look
+
 function createNode(mesh, color, shape, flatShade) {
   return { mesh, color, shape, flatShade, joint: null, children: [] };
 }
@@ -263,7 +262,7 @@ function render(time) {
   lastTime = t;
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-  // Camera moves with the keys; the light stays fixed in the world.
+  // Camera moves with the keys; the light stays fixed in the world
   const view = translate(camX, camY, camZ);
   gl.uniformMatrix4fv(uProjection, false, projection);
   gl.uniform3fv(uLightPos, transformPoint(view, lightWorld));
@@ -278,13 +277,13 @@ function render(time) {
   // Lower arm (root)
   lowerArm.joint = multiply(multiply(translate(0, -2, 0), rotation), rotateZ(0.5 * Math.sin(t)));
 
-  // Upper arm (child of lower arm) -- bent by the Upper Arm slider
+
   upperArm.joint = multiply(translate(0, 1.2, 0), rotateZ(upperArmAngle));
 
-  // Forearm (child of upper arm) -- bent by the Forearm slider
+  
   foreArm.joint = multiply(translate(0, 1.0, 0), rotateZ(foreArmAngle));
 
-  // Hand (child of forearm)
+  
   hand.joint = multiply(translate(0, 0.9, 0), rotateZ(0.8 * Math.sin(3.0 * t)));
 
   drawTree(lowerArm, view);
