@@ -38,6 +38,7 @@ in vec2 vTexCoord;
 uniform vec3 uLightPos;
 uniform sampler2D uTexture;
 uniform int uMapping;  // 0 = bump mapping, 1 = normal mapping
+uniform vec2 uTexOffset;  // scrolls the texture for animation
 
 out vec4 fragColor;
 
@@ -51,6 +52,8 @@ float height(vec2 uv) {
 }
 
 void main() {
+  // animated scrolling: shift the texture coordinates over time
+  vec2 uv = vTexCoord + uTexOffset;
   // Tangent frame (T, B, N)
   vec3 N = normalize(vNormal);
   vec3 T = normalize(vTangent - dot(vTangent, N) * N);
@@ -64,13 +67,13 @@ void main() {
     // Bump mapping: tilt the normal against the gradient of the height field
     vec2 du = vec2(1.0 / float(textureSize(uTexture, 0).x), 0.0);
     vec2 dv = vec2(0.0, 1.0 / float(textureSize(uTexture, 0).y));
-    float dhdu = (height(vTexCoord + du) - height(vTexCoord - du)) * 0.5;
-    float dhdv = (height(vTexCoord + dv) - height(vTexCoord - dv)) * 0.5;
+    float dhdu = (height(uv + du) - height(uv - du)) * 0.5;
+    float dhdv = (height(uv + dv) - height(uv - dv)) * 0.5;
     n = normalize(vec3(-bumpScale * dhdu, -bumpScale * dhdv, 1.0));
-    baseColor = texture(uTexture, vTexCoord).rgb;
+    baseColor = texture(uTexture, uv).rgb;
   } else {
     // Normal mapping: the texture stores the tangent-space normal in [0, 1]
-    n = normalize(texture(uTexture, vTexCoord).rgb * 2.0 - 1.0);
+    n = normalize(texture(uTexture, uv).rgb * 2.0 - 1.0);
     baseColor = vec3(0.85, 0.65, 0.3);
   }
 
@@ -122,7 +125,7 @@ const shaderError = document.getElementById("shaderError");
 vertEditor.value = VERTEX_SHADER;
 fragEditor.value = FRAGMENT_SHADER;
 
-let program, uModelView, uProjection, uLightPos, uMapping;
+let program, uModelView, uProjection, uLightPos, uMapping, uTexOffset;
 
 function updateProgram() {
   try {
@@ -134,6 +137,7 @@ function updateProgram() {
     uProjection = gl.getUniformLocation(program, "uProjection");
     uLightPos = gl.getUniformLocation(program, "uLightPos");
     uMapping = gl.getUniformLocation(program, "uMapping");
+    uTexOffset = gl.getUniformLocation(program, "uTexOffset");
     gl.uniform1i(gl.getUniformLocation(program, "uTexture"), 0);
     shaderError.textContent = "";
   } catch (e) {
@@ -190,10 +194,10 @@ const normalTexture = loadTexture("texture2.jpg");
 
 const BUMP_MAPPING = 0, NORMAL_MAPPING = 1;
 const objects = [
-  { mesh: cubeMesh, texture: brickTexture, mapping: BUMP_MAPPING, offset: [-4.5, 0, 0] },
-  { mesh: cylinderMesh, texture: normalTexture, mapping: NORMAL_MAPPING, offset: [-1.5, 0, 0] },
-  { mesh: sphereMesh, texture: brickTexture, mapping: BUMP_MAPPING, offset: [1.5, 0, 0] },
-  { mesh: coneMesh, texture: brickTexture, mapping: BUMP_MAPPING, offset: [4.5, 0, 0] }
+  { mesh: cubeMesh, texture: brickTexture, mapping: BUMP_MAPPING, offset: [-4.5, 0, 0], animated: false },
+  { mesh: cylinderMesh, texture: normalTexture, mapping: NORMAL_MAPPING, offset: [-1.5, 0, 0], animated: false },
+  { mesh: sphereMesh, texture: brickTexture, mapping: BUMP_MAPPING, offset: [1.5, 0, 0], animated: true },
+  { mesh: coneMesh, texture: brickTexture, mapping: BUMP_MAPPING, offset: [4.5, 0, 0], animated: false }
 ];
 
 gl.enable(gl.DEPTH_TEST);
@@ -255,9 +259,11 @@ function render(time) {
   const rotation = multiply(multiply(rotateY(dragRotY), rotateX(dragRotX)), axisRotation);
 
   gl.activeTexture(gl.TEXTURE0);
-  for (const { mesh, texture, mapping, offset } of objects) {
+  for (const { mesh, texture, mapping, offset, animated } of objects) {
     gl.uniformMatrix4fv(uModelView, false, multiply(view, multiply(translate(...offset), rotation)));
     gl.uniform1i(uMapping, mapping);
+    // Animated objects scroll their texture; others stay still.
+    gl.uniform2f(uTexOffset, animated ? t * 0.3 : 0.0, 0.0);
     gl.bindTexture(gl.TEXTURE_2D, texture);
     gl.bindVertexArray(mesh.vao);
     gl.drawElements(gl.TRIANGLES, mesh.count, gl.UNSIGNED_SHORT, 0);
