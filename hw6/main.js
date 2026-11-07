@@ -165,6 +165,8 @@ function createMesh({ positions, normals, tangents, texCoords, indices }) {
 
 const cubeMesh = createMesh(createCube());
 const cylinderMesh = createMesh(createCylinder());
+const sphereMesh = createMesh(createSphere());
+const coneMesh = createMesh(createCone());
 
 function loadTexture(url) {
   const texture = gl.createTexture();
@@ -188,8 +190,10 @@ const normalTexture = loadTexture("texture2.jpg");
 
 const BUMP_MAPPING = 0, NORMAL_MAPPING = 1;
 const objects = [
-  { mesh: cubeMesh, texture: brickTexture, mapping: BUMP_MAPPING, offset: [-1.8, 0, 0] },
-  { mesh: cylinderMesh, texture: normalTexture, mapping: NORMAL_MAPPING, offset: [1.8, 0, 0] }
+  { mesh: cubeMesh, texture: brickTexture, mapping: BUMP_MAPPING, offset: [-4.5, 0, 0] },
+  { mesh: cylinderMesh, texture: normalTexture, mapping: NORMAL_MAPPING, offset: [-1.5, 0, 0] },
+  { mesh: sphereMesh, texture: brickTexture, mapping: BUMP_MAPPING, offset: [1.5, 0, 0] },
+  { mesh: coneMesh, texture: brickTexture, mapping: BUMP_MAPPING, offset: [4.5, 0, 0] }
 ];
 
 gl.enable(gl.DEPTH_TEST);
@@ -199,7 +203,7 @@ const lightWorld = [3, 4, 5];
 
 // Interactive controls
 let dragRotX = 0, dragRotY = -0.5;      // mouse drag
-let camX = 0, camY = 0, camZ = -7;      // arrow keys, w, s
+let camX = 0, camY = 0, camZ = -11;     // arrow keys, w, s
 let sliderAngle = 0;                    // degrees
 let spinning = false, spinAngle = 0;    // Start/Stop button
 
